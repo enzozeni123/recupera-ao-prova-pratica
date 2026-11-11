@@ -1,0 +1,114 @@
+create table investidores (
+id serial primary key,
+nome varchar(100) not null,
+cpf char(11) unique not null,
+nivel_experiencia int default 0 check (nivel_experiencia >= 0)
+);
+
+create table carteiras (
+id serial primary key,
+investidor_id int references investidores(id),
+endereco_wallet varchar(100) unique not null,
+rede_blockchain varchar(50) not null,
+saldo_usd decimal(12,2) not null check (saldo_usd > 0),
+status varchar(20) default 'ativa'
+check (status in ('ativa', 'em analise', 'bloqueada', 'pausada'))
+);
+
+create table corretoras (
+id serial primary key,
+nome_exchange varchar(100) not null,
+cnpj char(14) unique not null,
+email_suporte varchar(150) unique not null
+);
+
+create table criptomoedas (
+id serial primary key,
+corretora_id int references corretoras(id),
+nome_moeda varchar(100) not null,
+preco_unitario_usd decimal (12,2) not null check (preco_unitario_usd > 0),
+categoria varchar(20) default 'Layer1'
+check (categoria in ('Layer1', 'DeFi', 'Memecoin', 'Stablecoin'))
+);
+
+create table transacoes_cripto (
+id serial primary key,
+carteira_id int references carteiras(id),
+criptomoeda_id int references criptomoedas(id),
+quantidade decimal (18,8) not null check (quantidade > 0)
+valor_pago decimal(12,2) not null check (valor_pago > 0)
+data_transacao timestamp not null default current_timestamp
+);
+
+insert into investidores (nome, cpf, nivel_experiencia) values
+('Enzo', '12345678901', 2),
+('Joaquin', '23456789012', 3),
+('Marco', '34567890123', 1),
+('Vitor', '45678901234', 4),
+('Bruno', '56789012345', 0);
+
+insert into carteiras (investidor_id, endereco_wallet, rede_blockchain, saldo_usd, status)
+values (1, '0x71C1234567890A', 'cahorrocoin', 3000.00, 'ativa'),
+(2, '0x82D2345678901B', 'enzocoin', 7000.00, 'em analise'),
+(3, '0x93E3456789012C', 'bitcoin', 1200.00, 'bloqueada'),
+(4, '0x14F4567890123D', 'cachorrocoin', 2500.00, 'pausada'),
+(5, '0x25A5678901234E', 'bitcoin', 1700.00, 'ativa')
+
+insert into corretoras (nome_exchange, cnpj, email_suporte) values
+('binance', '12345678000101', 'suporte@binance.com'),
+('moneyinvest', '23456789000102', 'suporte@moneyinvest.com'),
+('investments', '34567890000103', 'suporte@investments.com'),
+('dollarwin', '45678901000104', 'suporte@dollarwin.com'),
+('producemoney', '56789012000105', 'suporte@producemoney.com');
+
+insert into criptomoedas (corretora_id, nome_moeda, preco_unitario_usd, categoria)
+values (1, 'bitcoin', 30000.00, 'Layer1'),
+(2, 'ethereum', 1200.00, 'Layer1'),
+(3, 'solana', 1000.00, 'Layer1'),
+(4, 'enzocoin', 10.50, 'DeFi'),
+(5, 'cachorrocoin', 5.00, 'Memecoin');
+
+insert into transacoes_cripto (carteira_id, criptomoeda_id, quantidade, valor_pago, data_transacao)
+values (1, 1, 200.00, 950.00, '2026-11-01 10:30:00'),
+(2, 2, 0.50, 1600.00, '2026-11-02 12:20:00'),
+(3, 3, 2.00, 360.00, '2026-11-03 11:15:00'),
+(4, 4, 50.00, 625.00, '2026-11-04 13:40:00'),
+(5, 5, 3000.00, 750.00, '2026-11-05 11:30:00');
+
+select c.endereco_wallet, c.rede_blockchain, c.saldo_usd,
+i.nome as investidor, i.cpf
+from carteiras c
+inner join investidores i on c.investidor_id = i.id
+where c.status in ('Ativa', 'Em Analise');
+
+select co.nome_exchange, sum(t.valor_pago) as total_movimentado
+from transacoes_cripto t
+inner join criptomoedas cr on t.criptomoeda_id = cr.id
+inner join corretoras co on cr.corretora_id = co.id
+group by co.nome_exchange
+order by total_movimentado desc;
+
+select c.endereco_wallet, cr.nome_moeda, t.quantidade,
+t.valor_pago, t.data_transacao
+from transacoes_cripto t
+inner join carteiras c on t.carteira_id = c.id
+inner join criptomoedas cr on t.criptomoeda_id = cr.id
+where t.valor_pago > 500
+order by t.valor_pago desc;
+
+create view vw_painel_carteiras as
+select c.endereco_wallet, c.rede_blockchain, c.status,
+c.saldo_usd, i.nome as investidor, i.cpf
+from carteiras c
+inner join investidores i on c.investidor_id = i.id;
+
+create view vw_investimento_total_carteiras as
+select c.id as id_carteira, c.endereco_wallet, c.saldo_usd,
+count(t.id) as total_transacoes,
+coalesce(sum(t.valor_pago), 0) as custo_total
+from carteiras c
+left join transacoes_cripto t on c.id = t.carteira_id
+group by c.id, c.endereco_wallet, c.saldo_usd;
+
+select * from vw_painel_carteiras;
+select * from vw_investimento_total_carteiras;
